@@ -1,5 +1,5 @@
 package com.socket.server;
-//테스트용 콘솔 클라이언트
+// 테스트용 콘솔 클라이언트
 
 import com.google.gson.Gson;
 
@@ -25,40 +25,46 @@ public class ConsoleChatClient {
 
             // --- 사용자 정보 입력 ---
             System.out.print("층 번호 입력 (예: 3): ");
-            int floor = Integer.parseInt(scanner.nextLine());
+            int floor = Integer.parseInt(scanner.nextLine().trim());
 
-            System.out.print("구역/열람실 이름 입력 (예: A열람실): ");
-            String room = scanner.nextLine();
+            System.out.print("구역 입력 (A / B, 없으면 그냥 엔터): ");
+            String roomInput = scanner.nextLine().trim();
+            String room = roomInput.isEmpty() ? null : roomInput.toUpperCase();
 
             System.out.print("역할 입력 (USER / ADMIN): ");
             String role = scanner.nextLine().trim().toUpperCase();
 
             System.out.print("닉네임 입력: ");
-            String nickname = scanner.nextLine();
+            String nickname = scanner.nextLine().trim();
 
             // --- 서버에서 오는 메시지 수신 스레드 ---
             Thread receiver = new Thread(() -> {
                 try {
                     String line;
                     while ((line = in.readLine()) != null) {
-                        ChatMessage msg = gson.fromJson(line, ChatMessage.class);
+                        SocketMessage msg = gson.fromJson(line, SocketMessage.class);
+                        if (msg == null) continue;
 
-                        String prefix = String.format("[RECV][%dF-%s]",
-                                msg.getFloor(),
-                                msg.getRoom());
+                        Integer msgFloor = msg.getFloor();
+                        String msgRoom = msg.getRoom();
+
+                        String prefix = String.format("[RECV][%sF-%s]",
+                                msgFloor == null ? "-" : msgFloor.toString(),
+                                msgRoom == null ? "-" : msgRoom
+                        );
 
                         if ("SYSTEM".equalsIgnoreCase(msg.getType())) {
                             // 시스템 메시지 (입장/퇴장 등)
                             System.out.printf("%s[SYSTEM] %s%n",
                                     prefix,
-                                    msg.getContent());
+                                    msg.getMsg());
                         } else {
                             // 일반 채팅 메시지
                             System.out.printf("%s[%s] %s : %s%n",
                                     prefix,
                                     msg.getRole(),      // USER / ADMIN
                                     msg.getSender(),    // 닉네임
-                                    msg.getContent());  // 내용
+                                    msg.getMsg());      // 내용
                         }
                     }
                 } catch (IOException e) {
@@ -70,14 +76,15 @@ public class ConsoleChatClient {
             receiver.start();
 
             // --- JOIN 메시지 1번 전송 ---
-            ChatMessage join = new ChatMessage(
-                    "JOIN",
-                    role,
-                    floor,
-                    room,
-                    nickname,
-                    nickname + " 입장"
-            );
+            SocketMessage join = SocketMessage.builder()
+                    .type("JOIN")
+                    .role(role)
+                    .floor(floor)
+                    .room(room)          // "A"/"B"/null
+                    .sender(nickname)
+                    .msg(nickname + " 입장")
+                    .build();
+
             out.println(gson.toJson(join));
 
             // --- 채팅 루프 ---
@@ -88,14 +95,15 @@ public class ConsoleChatClient {
                     break;
                 }
 
-                ChatMessage chat = new ChatMessage(
-                        "CHAT",
-                        role,
-                        floor,
-                        room,
-                        nickname,
-                        text
-                );
+                SocketMessage chat = SocketMessage.builder()
+                        .type("CHAT")
+                        .role(role)
+                        .floor(floor)
+                        .room(room)
+                        .sender(nickname)
+                        .msg(text)
+                        .build();
+
                 out.println(gson.toJson(chat));
             }
 
@@ -104,4 +112,3 @@ public class ConsoleChatClient {
         }
     }
 }
-
