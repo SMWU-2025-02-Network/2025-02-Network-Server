@@ -9,5 +9,4 @@ public class Smwu202502NetworkApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(Smwu202502NetworkApplication.class, args);
 	}
-
 }
