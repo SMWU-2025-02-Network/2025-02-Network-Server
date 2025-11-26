@@ -1,33 +1,33 @@
 package com.socket.server;
 // ServerSocket 열기 + 브로드캐스트 + 클라이언트 리스트 관리
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+@Slf4j
+@Component
 public class ChatServer {
 
-    private final int port;
+    private final int port = 5050;
 
     // 접속 중인 클라이언트 목록
     private final List<ClientHandler> clients = new CopyOnWriteArrayList<>();
 
-    public ChatServer(int port) {
-        this.port = port;
-    }
-
     public void start() {
-        System.out.println("[SERVER] 도서관 채팅 서버 시작, 포트: " + port);
+        log.info("[SERVER] 도서관 채팅 서버 시작, 포트: {}", port);
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
 
             while (true) {
                 // 1) 클라이언트 접속 대기
                 Socket clientSocket = serverSocket.accept();
-                System.out.println("[SERVER] 새 클라이언트 접속: "
-                        + clientSocket.getRemoteSocketAddress());
+                log.info("[SERVER] 새 클라이언트 접속: {}", clientSocket.getRemoteSocketAddress());
 
                 // 2) 핸들러 생성 후 리스트에 추가
                 ClientHandler handler = new ClientHandler(clientSocket, this);
@@ -39,8 +39,7 @@ public class ChatServer {
             }
 
         } catch (IOException e) {
-            System.out.println("[SERVER] 서버 오류: " + e.getMessage());
-            e.printStackTrace();
+            log.error("[SERVER] 서버 오류: {}", e.getMessage(), e);
         }
     }
 
@@ -56,10 +55,8 @@ public class ChatServer {
         String msgRoom = message.getRoom();
 
         if (msgFloor == null || msgRoom == null) {
-            System.out.printf(
-                    "[SERVER] floor/room 정보가 없는 메시지 브로드캐스트 요청(type=%s) → 스킵%n",
-                    message.getType()
-            );
+            log.warn("[SERVER] floor/room 정보가 없는 메시지 브로드캐스트 요청(type={}) → 스킵",
+                    message.getType());
             return;
         }
 
@@ -70,22 +67,12 @@ public class ChatServer {
             }
         }
 
-        System.out.printf(
-                "[SERVER] 메시지 브로드캐스트 완료 (type=%s, %d층 %s, 전송 대상 %d명)%n",
-                message.getType(),
-                msgFloor,
-                msgRoom,
-                count
-        );
+        log.info("[SERVER] 메시지 브로드캐스트 완료 (type={}, {}층 {}, 전송 대상 {}명)",
+                message.getType(), msgFloor, msgRoom, count);
     }
 
     public void removeClient(ClientHandler handler) {
         clients.remove(handler);
-        System.out.println("[SERVER] 클라이언트 연결 종료: " + handler);
-    }
-
-    public static void main(String[] args) {
-        ChatServer server = new ChatServer(5050);
-        server.start();
+        log.info("[SERVER] 클라이언트 연결 종료: {}", handler);
     }
 }

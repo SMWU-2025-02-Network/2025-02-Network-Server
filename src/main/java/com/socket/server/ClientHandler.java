@@ -118,7 +118,7 @@ public class ClientHandler implements Runnable {
                 server.broadcast(leaveMsg, this);
             }
 
-            server.removeClient(this);
+            //server.removeClient(this);
             try {
                 socket.close();
             } catch (IOException ignore) {}
