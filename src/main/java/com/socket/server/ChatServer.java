@@ -1,5 +1,5 @@
 package com.socket.server;
-//ServerSocket 열기 + 브로드캐스트 + 클라이언트 리스트 관리
+// ServerSocket 열기 + 브로드캐스트 + 클라이언트 리스트 관리
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -44,20 +44,39 @@ public class ChatServer {
         }
     }
 
-    // 지금은 모든 클라이언트에게 브로드캐스트
-    public void broadcast(ChatMessage message,ClientHandler from) {
+    /**
+     * 같은 층/방 사용자에게 브로드캐스트
+     * - floor, room이 null이면 전송 범위를 결정하기 애매해서 일단 무시
+     *   (필요하면 "전체 방송" 로직 따로 추가 가능)
+     */
+    public void broadcast(SocketMessage message, ClientHandler from) {
         int count = 0;
 
-        synchronized (clients) {
-            for (ClientHandler client : clients) {
-                // 같은 층 + 같은 방에게만 전송
-                if (client.isSameRoom(message.getFloor(), message.getRoom())) {
-                    client.sendMessage(message);
-                }
+        Integer msgFloor = message.getFloor();
+        String msgRoom = message.getRoom();
+
+        if (msgFloor == null || msgRoom == null) {
+            System.out.printf(
+                    "[SERVER] floor/room 정보가 없는 메시지 브로드캐스트 요청(type=%s) → 스킵%n",
+                    message.getType()
+            );
+            return;
+        }
+
+        for (ClientHandler client : clients) {
+            if (client.isSameRoom(msgFloor, msgRoom)) {
+                client.sendMessage(message);
+                count++;
             }
         }
 
-        System.out.println("[SERVER] 메시지 브로드캐스트 완료 (클라이언트 " + count + "명)");
+        System.out.printf(
+                "[SERVER] 메시지 브로드캐스트 완료 (type=%s, %d층 %s, 전송 대상 %d명)%n",
+                message.getType(),
+                msgFloor,
+                msgRoom,
+                count
+        );
     }
 
     public void removeClient(ClientHandler handler) {
