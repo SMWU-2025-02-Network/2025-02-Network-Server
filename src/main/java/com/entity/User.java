@@ -13,13 +13,14 @@ import java.time.LocalDateTime;
 public class User {
 
     // 내부 ENUM
-    public enum Role {
+    public enum RoleType {
         USER, ADMIN
     }
 
     public enum RoomType {
         A, B
     }
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,7 +37,7 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Role role;
+    private RoleType role;
 
     @Column(nullable = false)
     private int floor;
