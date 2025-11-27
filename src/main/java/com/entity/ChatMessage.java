@@ -23,6 +23,12 @@ public class ChatMessage {
     @Enumerated(EnumType.STRING)
     private User.RoomType room;
 
+    @Enumerated(EnumType.STRING)
+    private User.RoleType role;
+
+    @Column(nullable = false)
+    private String nickname;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;

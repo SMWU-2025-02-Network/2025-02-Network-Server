@@ -1,6 +1,7 @@
 package com.socket.server;
 // ServerSocket 열기 + 브로드캐스트 + 클라이언트 리스트 관리
 
+import com.service.ChatMessageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -15,9 +16,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class ChatServer {
 
     private final int port = 5050;
+    private final ChatMessageService chatMessageService;
 
     // 접속 중인 클라이언트 목록
     private final List<ClientHandler> clients = new CopyOnWriteArrayList<>();
+
+    public ChatServer(ChatMessageService chatMessageService) {
+        this.chatMessageService = chatMessageService;
+    }
 
     public void start() {
         log.info("[SERVER] 도서관 채팅 서버 시작, 포트: {}", port);
@@ -30,7 +36,8 @@ public class ChatServer {
                 log.info("[SERVER] 새 클라이언트 접속: {}", clientSocket.getRemoteSocketAddress());
 
                 // 2) 핸들러 생성 후 리스트에 추가
-                ClientHandler handler = new ClientHandler(clientSocket, this);
+                ClientHandler handler =
+                        new ClientHandler(clientSocket, this, chatMessageService);
                 clients.add(handler);
 
                 // 3) 스레드로 실행
