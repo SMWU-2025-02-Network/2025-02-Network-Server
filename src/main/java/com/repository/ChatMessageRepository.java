@@ -1,4 +1,4 @@
-package com.Repository;
+package com.repository;
 
 import com.entity.ChatMessage;
 import org.springframework.data.jpa.repository.JpaRepository;

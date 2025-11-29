@@ -2,6 +2,8 @@ package com.socket.server;
 //프로토콜/소켓용 DTO
 
 import lombok.*;
+import java.util.List;
+import com.dto.SeatInfoDto;
 
 @Getter
 @Setter
@@ -32,4 +34,8 @@ public class SocketMessage {
     // ERROR / ALERT 전용
     private String message;   // 에러/알림 메시지
     private Integer code;     // 에러 코드 등
+
+    // SEAT_UPDATE 전용
+    // type = "SEAT_UPDATE" 일 때, 같은 room의 좌석 상태 목록을 담아 보냄
+    private List<SeatInfoDto> seats;
 }

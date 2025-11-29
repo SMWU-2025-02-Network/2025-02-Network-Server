@@ -95,16 +95,23 @@ public class ConsoleChatClient {
                     break;
                 }
 
-                SocketMessage chat = SocketMessage.builder()
+                // 1) 만약 사용자가 JSON을 직접 입력했다면 → 그대로 서버로 전송
+                if (text.trim().startsWith("{")) {
+                    out.println(text);
+                    continue;
+                }
+
+                // 2) 그 외에는 기존처럼 CHAT으로 보내기
+                SocketMessage msg = SocketMessage.builder()
                         .type("CHAT")
-                        .role(role)
+                        .role("USER")
                         .floor(floor)
                         .room(room)
                         .sender(nickname)
                         .msg(text)
                         .build();
 
-                out.println(gson.toJson(chat));
+                out.println(gson.toJson(msg));
             }
 
         } catch (IOException e) {

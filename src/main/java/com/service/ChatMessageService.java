@@ -1,7 +1,7 @@
 package com.service;
 
-import com.Repository.ChatMessageRepository;
-import com.Repository.UserRepository;
+import com.repository.ChatMessageRepository;
+import com.repository.UserRepository;
 import com.entity.ChatMessage;
 import com.entity.User;
 import com.socket.server.SocketMessage;
