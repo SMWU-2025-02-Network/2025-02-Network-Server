@@ -187,42 +187,18 @@ public class CheckinService {
                 .collect(Collectors.toList());
     }
 
-    // AWAY 1시간 이상 → 자동 CHECKOUT (스케줄러에서 호출)
-    public List<SeatInfoDto> autoCheckoutAndGetUpdatedSeats() {
-        LocalDateTime threshold = LocalDateTime.now().minusHours(1);
-
-        var outdated = checkinRepository
-                .findByStatusAndCheckoutTimeIsNullAndAwayStartedAtBefore(
-                        CheckinStatus.AWAY,
-                        threshold
-                );
-
-        // 영향을 받은 (floor, room) set 만들기
-        Set<String> affectedRooms = new HashSet<>();
-        for (Checkin c : outdated) {
-            c.checkout();
-            String key = c.getSeat().getFloor() + "|" + c.getSeat().getRoom(); // Seat 필드명에 맞게 수정
-            affectedRooms.add(key);
-        }
-
-        // 방별로 좌석 상태 다시 계산해서 한 번에 반환
-        List<SeatInfoDto> result = new ArrayList<>();
-        for (String key : affectedRooms) {
-            String[] parts = key.split("\\|");
-            int floor = Integer.parseInt(parts[0]);
-            String room = parts[1];
-
-            result.addAll(getSeatStatusesByRoom(floor, room));
-        }
-        return result;
-    }
 
     /**
-     * AWAY 상태에서 1시간 지난 체크인들을 자동으로 checkout 처리하고,
+     * AWAY 상태에서 기준 시간 지난 체크인들을 자동으로 checkout 처리하고,
      * 층/room 별로 최신 좌석 상태 목록을 묶어서 반환한다.
      */
     public List<SeatUpdateDto> autoCheckoutAndBuildSeatUpdates() {
-        LocalDateTime threshold = LocalDateTime.now().minusHours(1);
+
+        //외출 시간 1분 기준 (테스트용)
+        LocalDateTime threshold = LocalDateTime.now().minusMinutes(1);
+
+        // 외출 시간 1시간 기준
+        // LocalDateTime threshold = LocalDateTime.now().minusHours(1);
 
         var outdated = checkinRepository
                 .findByStatusAndCheckoutTimeIsNullAndAwayStartedAtBefore(
