@@ -1,6 +1,7 @@
 package com.service;
 
 import com.dto.SeatInfoDto;
+import com.dto.SeatUpdateDto;
 import com.entity.Checkin;
 import com.entity.Checkin.CheckinStatus;
 import com.entity.Checkin.SeatStatus;
@@ -184,6 +185,47 @@ public class CheckinService {
             String room = parts[1];
 
             result.addAll(getSeatStatusesByRoom(floor, room));
+        }
+        return result;
+    }
+
+    /**
+     * AWAY 상태에서 1시간 지난 체크인들을 자동으로 checkout 처리하고,
+     * 층/room 별로 최신 좌석 상태 목록을 묶어서 반환한다.
+     */
+    public List<SeatUpdateDto> autoCheckoutAndBuildSeatUpdates() {
+        LocalDateTime threshold = LocalDateTime.now().minusHours(1);
+
+        var outdated = checkinRepository
+                .findByStatusAndCheckoutTimeIsNullAndAwayStartedAtBefore(
+                        CheckinStatus.AWAY,
+                        threshold
+                );
+
+        // 영향을 받은 (floor, room)을 key 로 저장
+        Set<String> affectedRooms = new HashSet<>();
+        for (Checkin c : outdated) {
+            c.checkout(); // 실제 퇴실 처리
+            String key = c.getSeat().getFloor() + "|" + c.getSeat().getRoom(); // Seat 필드명에 맞게
+            affectedRooms.add(key);
+        }
+
+        // 방별로 최신 좌석 상태 계산해서 SeatUpdateDto로 묶기
+        List<SeatUpdateDto> result = new ArrayList<>();
+        for (String key : affectedRooms) {
+            String[] parts = key.split("\\|");
+            int floor = Integer.parseInt(parts[0]);
+            String room = parts[1];
+
+            List<SeatInfoDto> seats = getSeatStatusesByRoom(floor, room);
+
+            result.add(
+                    SeatUpdateDto.builder()
+                            .floor(floor)
+                            .room(room)
+                            .seats(seats)
+                            .build()
+            );
         }
         return result;
     }
