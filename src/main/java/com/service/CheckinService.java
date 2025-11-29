@@ -26,18 +26,30 @@ public class CheckinService {
     private final UserRepository userRepository;
     private final SeatRepository seatRepository;
 
-    // CHECKIN
-    public void checkin(Long userId, Long seatId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-        Seat seat = seatRepository.findById(seatId)
+    //----공통 함수----
+    private Seat getSeat(int floor, String room, int seatNo) {
+        return seatRepository.findByFloorAndRoomAndSeatNumber(floor, room, seatNo)
                 .orElseThrow(() -> new IllegalArgumentException("좌석을 찾을 수 없습니다."));
+    }
+
+    private Checkin getActiveCheckin(Seat seat) {
+        return checkinRepository
+                .findFirstBySeatAndCheckoutTimeIsNullOrderByCheckinTimeDesc(seat)
+                .orElseThrow(() -> new IllegalStateException("현재 사용 중인 좌석이 아닙니다."));
+    }
+
+    // CHECKIN
+    public void checkin(int floor, String room, int seatNo, String userId) {
+        User user = userRepository.findById(Long.parseLong(userId))
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        Seat seat = getSeat(floor, room, seatNo);
 
         // 같은 유저가 아직 체크아웃 안 한 게 있으면 정리 (정책에 따라 다르게 처리 가능)
         checkinRepository.findFirstByUserAndCheckoutTimeIsNullOrderByCheckinTimeDesc(user)
                 .ifPresent(Checkin::checkout);
 
-        // 해당 좌석에 누군가 앉아있으면 막고 싶으면 여기서 검사
+        // 해당 좌석에 누군가 앉아있을 경우 예외처리
         checkinRepository.findFirstBySeatAndCheckoutTimeIsNullOrderByCheckinTimeDesc(seat)
                 .ifPresent(active -> {
                     throw new IllegalStateException("이미 사용중인 좌석입니다.");
@@ -54,32 +66,32 @@ public class CheckinService {
     }
 
     // AWAY_START
-    public void startAway(Long userId, Long seatId) {
-        Seat seat = seatRepository.findById(seatId)
-                .orElseThrow(() -> new IllegalArgumentException("좌석을 찾을 수 없습니다."));
+    public void startAway(int floor, String room, int seatNo, String userId) {
+
+        Seat seat = getSeat(floor, room, seatNo);
 
         Checkin checkin = checkinRepository
                 .findFirstBySeatAndCheckoutTimeIsNullOrderByCheckinTimeDesc(seat)
                 .orElseThrow(() -> new IllegalStateException("현재 사용 중인 좌석이 아닙니다."));
 
         // 본인 좌석인지 확인
-        if (!checkin.getUser().getId().equals(userId)) {
+        if (!checkin.getUser().getId().equals(Long.parseLong(userId))) {
             throw new IllegalStateException("이 좌석의 사용자가 아닙니다.");
         }
 
-        checkin.startAway();   // 엔티티 편의 메서드
+        checkin.startAway();
     }
 
     //AWAY_BACK
-    public void backFromAway(Long userId, Long seatId) {
-        Seat seat = seatRepository.findById(seatId)
-                .orElseThrow(() -> new IllegalArgumentException("좌석을 찾을 수 없습니다."));
+    public void backFromAway(int floor, String room, int seatNo, String userId) {
+
+        Seat seat = getSeat(floor, room, seatNo);
 
         Checkin checkin = checkinRepository
                 .findFirstBySeatAndCheckoutTimeIsNullOrderByCheckinTimeDesc(seat)
                 .orElseThrow(() -> new IllegalStateException("현재 사용 중인 좌석이 아닙니다."));
 
-        if (!checkin.getUser().getId().equals(userId)) {
+        if (!checkin.getUser().getId().equals(Long.parseLong(userId))) {
             throw new IllegalStateException("이 좌석의 사용자가 아닙니다.");
         }
 
@@ -87,20 +99,21 @@ public class CheckinService {
     }
 
     // CHECKOUT
-    public void checkout(Long userId, Long seatId) {
-        Seat seat = seatRepository.findById(seatId)
-                .orElseThrow(() -> new IllegalArgumentException("좌석을 찾을 수 없습니다."));
+    public void checkout(int floor, String room, int seatNo, String userId) {
+
+        Seat seat = getSeat(floor, room, seatNo);
 
         Checkin checkin = checkinRepository
                 .findFirstBySeatAndCheckoutTimeIsNullOrderByCheckinTimeDesc(seat)
                 .orElseThrow(() -> new IllegalStateException("현재 사용 중인 좌석이 아닙니다."));
 
-        if (!checkin.getUser().getId().equals(userId)) {
+        if (!checkin.getUser().getId().equals(Long.parseLong(userId))) {
             throw new IllegalStateException("이 좌석의 사용자가 아닙니다.");
         }
 
         checkin.checkout();
     }
+
 
     //좌석 상태 1개 계산 (Seat 기준)
     @Transactional(readOnly = true)
