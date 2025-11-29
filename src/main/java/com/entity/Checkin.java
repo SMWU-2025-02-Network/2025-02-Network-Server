@@ -85,5 +85,13 @@ public class Checkin {
     public void checkout() {
         this.checkoutTime = LocalDateTime.now();
     }
+
+    // 새 체크인 세션 시작(기존 row 재사용도 이 메서드로 처리)
+    public void startNewSession() {
+        this.status = CheckinStatus.IN_USE;
+        this.checkinTime = LocalDateTime.now();
+        this.awayStartedAt = null;
+        this.checkoutTime = null;
+    }
 }
 

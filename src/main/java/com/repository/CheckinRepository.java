@@ -24,4 +24,8 @@ public interface CheckinRepository extends JpaRepository<Checkin, Long> {
             Checkin.CheckinStatus status,
             LocalDateTime awayStartedAtBefore
     );
+
+    //마지막 체크인 조회 메서드
+    Optional<Checkin> findFirstByUserAndSeatOrderByCheckinTimeDesc(User user, Seat seat);
+
 }

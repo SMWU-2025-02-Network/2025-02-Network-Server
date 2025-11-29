@@ -51,16 +51,11 @@ public class CheckinService {
 
     // CHECKIN
     public void checkin(int floor, String room, int seatNo, String userId) {
-        log.info("[CHECKIN] called. floor={}, room={}, seatNo={}, userId={}",
-                floor, room, seatNo, userId);
 
         User user = userRepository.findById(Long.parseLong(userId))
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
         Seat seat = getSeat(floor, room, seatNo);
-
-        log.info("[CHECKIN] user={}, seatId={}", user.getId(), seat.getId());
-
 
         // 같은 유저가 아직 체크아웃 안 한 게 있으면 정리
         checkinRepository.findFirstByUserAndCheckoutTimeIsNullOrderByCheckinTimeDesc(user)
@@ -76,16 +71,25 @@ public class CheckinService {
                     throw new IllegalStateException("이미 사용중인 좌석입니다.");
                 });
 
-        Checkin checkin = Checkin.builder()
-                .user(user)
-                .seat(seat)
-                .status(Checkin.CheckinStatus.IN_USE)
-                .checkinTime(LocalDateTime.now())
-                .build();
+        // 같은 user + seat 의 마지막 row를 가져와서 재사용할지 결정
+        Optional<Checkin> lastOpt =
+                checkinRepository.findFirstByUserAndSeatOrderByCheckinTimeDesc(user, seat);
 
-        checkinRepository.save(checkin);
-        log.info("[CHECKIN] saved. checkinId={}", checkin.getId());
+        Checkin checkin;
+        if (lastOpt.isPresent()) {
 
+            // 기존 row 재사용 (id 그대로 유지)
+            checkin = lastOpt.get();
+            checkin.startNewSession();     // 상태/시간만 다시 세팅
+        } else {
+            // 없는 경우에만 새 row 생성
+            checkin = Checkin.builder()
+                    .user(user)
+                    .seat(seat)
+                    .build();
+            checkin.startNewSession();
+            checkinRepository.save(checkin);
+        }
     }
 
     // AWAY_START
