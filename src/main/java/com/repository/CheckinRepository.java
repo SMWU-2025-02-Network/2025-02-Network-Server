@@ -17,7 +17,7 @@ public interface CheckinRepository extends JpaRepository<Checkin, Long> {
     Optional<Checkin> findFirstByUserAndCheckoutTimeIsNullOrderByCheckinTimeDesc(User user);
 
     // room 단위 좌석 상태 계산용
-    List<Checkin> findBySeat_FloorAndSeat_RoomAndCheckoutTimeIsNull(int floor, String room);
+    List<Checkin> findBySeat_FloorAndSeat_RoomAndCheckoutTimeIsNull(int floor, User.RoomType room);
 
     // AWAY + 1시간 지난 row 자동 퇴실용
     List<Checkin> findByStatusAndCheckoutTimeIsNullAndAwayStartedAtBefore(

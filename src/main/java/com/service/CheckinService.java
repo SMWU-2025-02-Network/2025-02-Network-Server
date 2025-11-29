@@ -11,6 +11,7 @@ import com.repository.CheckinRepository;
 import com.repository.SeatRepository;
 import com.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
+
 public class CheckinService {
 
     private final CheckinRepository checkinRepository;
@@ -29,7 +32,14 @@ public class CheckinService {
 
     //----공통 함수----
     private Seat getSeat(int floor, String room, int seatNo) {
-        return seatRepository.findByFloorAndRoomAndSeatNumber(floor, room, seatNo)
+
+        // "A" / "B" 문자열을 enum 으로 변환
+        User.RoomType roomType = User.RoomType.valueOf(room);     // room = "A" -> RoomType.A
+
+        // seatNo(int) -> seat_number(varchar) 에 맞게 String으로 변환
+        String seatNumber = String.valueOf(seatNo);
+
+        return seatRepository.findByFloorAndRoomAndSeatNumber(floor, roomType, seatNumber)
                 .orElseThrow(() -> new IllegalArgumentException("좌석을 찾을 수 없습니다."));
     }
 
@@ -41,14 +51,24 @@ public class CheckinService {
 
     // CHECKIN
     public void checkin(int floor, String room, int seatNo, String userId) {
+        log.info("[CHECKIN] called. floor={}, room={}, seatNo={}, userId={}",
+                floor, room, seatNo, userId);
+
         User user = userRepository.findById(Long.parseLong(userId))
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
         Seat seat = getSeat(floor, room, seatNo);
 
-        // 같은 유저가 아직 체크아웃 안 한 게 있으면 정리 (정책에 따라 다르게 처리 가능)
+        log.info("[CHECKIN] user={}, seatId={}", user.getId(), seat.getId());
+
+
+        // 같은 유저가 아직 체크아웃 안 한 게 있으면 정리
         checkinRepository.findFirstByUserAndCheckoutTimeIsNullOrderByCheckinTimeDesc(user)
-                .ifPresent(Checkin::checkout);
+                /*.ifPresent(Checkin::checkout);*/
+                .ifPresent(c -> {
+                    log.info("[CHECKIN] 기존 체크인 checkout 처리. checkinId={}", c.getId());
+                    c.checkout();
+                });
 
         // 해당 좌석에 누군가 앉아있을 경우 예외처리
         checkinRepository.findFirstBySeatAndCheckoutTimeIsNullOrderByCheckinTimeDesc(seat)
@@ -64,6 +84,8 @@ public class CheckinService {
                 .build();
 
         checkinRepository.save(checkin);
+        log.info("[CHECKIN] saved. checkinId={}", checkin.getId());
+
     }
 
     // AWAY_START
@@ -128,9 +150,11 @@ public class CheckinService {
     // room 기준 좌석 상태 목록 (SEAT_UPDATE에서 사용)
     @Transactional(readOnly = true)
     public List<SeatInfoDto> getSeatStatusesByRoom(int floor, String room) {
+        User.RoomType roomType = User.RoomType.valueOf(room);   // "A" -> RoomType.A
+
         // 1) 아직 퇴실 안 한 체크인들 가져오기
         List<Checkin> active = checkinRepository
-                .findBySeat_FloorAndSeat_RoomAndCheckoutTimeIsNull(floor, room);
+                .findBySeat_FloorAndSeat_RoomAndCheckoutTimeIsNull(floor, roomType);
 
         // 2) seat 기준 최신 row만 남기기
         Map<Long, Checkin> latestBySeatId = new HashMap<>();
