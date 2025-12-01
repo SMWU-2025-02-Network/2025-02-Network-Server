@@ -34,6 +34,8 @@ public class SensorData {
     @Column(nullable = false)
     private float value;
 
+    private String sender;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

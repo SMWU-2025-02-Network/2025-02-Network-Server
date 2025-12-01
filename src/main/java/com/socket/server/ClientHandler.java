@@ -5,6 +5,7 @@ import com.google.gson.JsonSyntaxException;
 import com.service.ChatMessageService;
 import com.service.CheckinService;
 import com.dto.SeatInfoDto;
+import com.service.SensorDataService;
 
 import java.io.*;
 import java.net.Socket;
@@ -18,6 +19,7 @@ public class ClientHandler implements Runnable {
     private final ChatServer server;
     private final ChatMessageService chatMessageService;
     private final CheckinService checkinService;
+    private final SensorDataService sensorDataService;
 
     private PrintWriter out;
     private BufferedReader in;
@@ -30,11 +32,12 @@ public class ClientHandler implements Runnable {
 
     public ClientHandler(Socket socket, ChatServer server,
                          ChatMessageService chatMessageService,
-                         CheckinService checkinService) {
+                         CheckinService checkinService, SensorDataService sensorDataService) {
         this.socket = socket;
         this.server = server;
         this.chatMessageService = chatMessageService;
         this.checkinService = checkinService;
+        this.sensorDataService = sensorDataService;
     }
 
     // 서버가 이 클라이언트에게 메시지를 보낼 때 사용
@@ -144,8 +147,27 @@ public class ClientHandler implements Runnable {
                     else if ("CHECKOUT".equals(type)) {
                         handleCheckout(msg);
                     }
-                    // TODO: SENSOR_DATA 등 확장
 
+                    //SENSOR_DATA 처리
+                    else if ("SENSOR_DATA".equals(type)) {
+
+                        // 1) 기본 정보 채우기 (floor, room, sender)
+                        if (msg.getFloor() == null) {
+                            msg.setFloor(this.floor);
+                        }
+                        if (msg.getRoom() == null) {
+                            msg.setRoom(this.room);
+                        }
+                        if (msg.getSender() == null) {
+                            msg.setSender(this.nickname);   // 보통 "sensor_2A" 같은 값일 것
+                        }
+                        if (msg.getRole() == null) {
+                            msg.setRole(this.role);         // SENSOR 라고 들어있을 가능성 높음
+                        }
+
+                        // 2) 센서 데이터 저장 + 대시보드 브로드캐스트
+                        sensorDataService.handleSensorData(msg);
+                    }
                     else {
                         System.out.println("[INFO] 처리되지 않은 type: " + msg.getType());
                     }

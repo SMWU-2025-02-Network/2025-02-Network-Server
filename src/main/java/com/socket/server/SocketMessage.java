@@ -29,7 +29,7 @@ public class SocketMessage {
     // SENSOR_DATA / DASHBOARD_UPDATE 전용
     private Double temp;
     private Double lux;
-    private Integer co2;
+    private Double co2;
 
     // ERROR / ALERT 전용
     private String message;   // 에러/알림 메시지
