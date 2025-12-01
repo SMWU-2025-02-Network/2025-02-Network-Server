@@ -19,7 +19,7 @@ public class MultiFloorSensorPublisher {
 
     public static void main(String[] args) {
 
-        // 📌 센서 목록: 층/열람실 구조 맞게 필요하면 여기서만 수정하면 됨
+        // 센서 목록
         List<SensorConfig> sensors = List.of(
                 new SensorConfig(1, "A", "sensor_1A"),
                 new SensorConfig(1, "B", "sensor_1B"),
@@ -32,10 +32,10 @@ public class MultiFloorSensorPublisher {
                 new SensorConfig(6, "A", "sensor_6A")
         );
 
-        String host = "localhost"; // 서버 IP
+        String host = "localhost";
         int port = 5050;           // ChatServer 포트
 
-        // ⭐ 센서마다 스레드를 하나씩 돌린다
+        // 센서마다 스레드를 하나씩 돌린다
         for (SensorConfig cfg : sensors) {
             Thread t = new Thread(
                     () -> runSensorLoop(host, port, cfg),
