@@ -71,17 +71,12 @@ public class MultiFloorSensorPublisher {
 
                 // 2) 5초마다 SENSOR_DATA 전송
                 while (true) {
-                    double temp = 23 + ThreadLocalRandom.current().nextDouble(0, 2);    // 23~25℃
+                    double temp = 20 + ThreadLocalRandom.current().nextDouble(0, 5);    // 20~30℃
                     double co2  = 600 + ThreadLocalRandom.current().nextDouble(0, 80);  // 600~680ppm
                     double lux  = 250 + ThreadLocalRandom.current().nextDouble(0, 100); // 250~350 lux
 
                     SocketMessage dataMsg = SocketMessage.builder()
                             .type("SENSOR_DATA")
-                            // floor/room/sender는 ClientHandler가 this.xxx로 채워줘도 되지만,
-                            // 혹시 몰라 명시해도 됨 (원하면 주석 해제)
-                            // .floor(cfg.floor())
-                            // .room(cfg.room())
-                            // .sender(cfg.sensorId())
                             .temp(temp)
                             .co2(co2)
                             .lux(lux)
