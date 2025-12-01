@@ -69,7 +69,7 @@ public class MultiFloorSensorPublisher {
                 out.flush();
                 System.out.println("[SENSOR " + cfg.sensorId() + "] JOIN 전송: " + gson.toJson(joinMsg));
 
-                // 2) 5초마다 SENSOR_DATA 전송
+                // 2) 2초마다 SENSOR_DATA 전송
                 while (true) {
                     double temp = 20 + ThreadLocalRandom.current().nextDouble(0, 5);    // 20~30℃
                     double co2  = 600 + ThreadLocalRandom.current().nextDouble(0, 80);  // 600~680ppm
@@ -94,8 +94,8 @@ public class MultiFloorSensorPublisher {
                         System.out.println("[FROM SERVER to " + cfg.sensorId() + "] " + line);
                     }
 
-                    // ⏱ 5초 대기
-                    Thread.sleep(5000);
+                    // ⏱ 2초 대기
+                    Thread.sleep(200);
                 }
 
             } catch (Exception e) {
