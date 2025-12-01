@@ -33,7 +33,18 @@ public class CheckinScheduler {
         List<SeatUpdateDto> updates = checkinService.autoCheckoutAndBuildSeatUpdates();
 
         // 2) 각 room마다 SEAT_UPDATE 메시지 만들어 브로드캐스트
-        for (SeatUpdateDto update : updates) {
+        for (SeatUpdateDto update : updates){
+
+            // SeatInfoDto -> SocketMessage.SeatInfo 변환
+            List<SocketMessage.SeatInfo> seatInfos = update.getSeats().stream()
+                    .map(dto -> SocketMessage.SeatInfo.builder()
+                            .seatNo(Integer.parseInt(dto.getSeatNo()))
+                            .state(dto.getStatus().name())
+                            .userId(dto.getUserId() != null ? String.valueOf(dto.getUserId()) : null)
+                            .remainSeconds(null)
+                            .build()
+                    )
+                    .toList();
 
             SocketMessage msg = SocketMessage.builder()
                     .type("SEAT_UPDATE")
@@ -41,8 +52,9 @@ public class CheckinScheduler {
                     .room(update.getRoom())
                     .role("SYSTEM")
                     .sender("SYSTEM")
-                    .seats(update.getSeats())
+                    .seats(seatInfos)
                     .build();
+
 
             // 같은 room의 클라이언트들에게 전송
             chatServer.broadcast(msg, null);

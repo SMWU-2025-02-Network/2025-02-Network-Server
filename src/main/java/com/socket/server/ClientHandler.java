@@ -301,21 +301,37 @@ public class ClientHandler implements Runnable {
      */
     private void sendSeatUpdateToRoom(int floor, String room) {
 
-        // 현재 room의 좌석 상태 계산
-        List<SeatInfoDto> seats = checkinService.getSeatStatusesByRoom(floor, room);
+        // 1) 현재 room의 좌석 상태 가져오기 (SeatInfoDto)
+        List<SeatInfoDto> dtoList = checkinService.getSeatStatusesByRoom(floor, room);
 
+        // 2) SeatInfoDto → SocketMessage.SeatInfo 변환
+        List<SocketMessage.SeatInfo> seatInfos = dtoList.stream()
+                .map(dto -> SocketMessage.SeatInfo.builder()
+                        .seatNo(Integer.parseInt(dto.getSeatNo()))
+
+                        .state(dto.getStatus().name())
+
+                        .userId(dto.getUserId() != null ? String.valueOf(dto.getUserId()) : null)
+                        
+                        .remainSeconds(null)
+                        .build()
+                )
+                .toList();
+
+        // 3) SocketMessage 객체 생성
         SocketMessage updateMsg = SocketMessage.builder()
                 .type("SEAT_UPDATE")
                 .floor(floor)
                 .room(room)
                 .role("SYSTEM")
                 .sender("SYSTEM")
-                .seats(seats)
+                .seats(seatInfos)
                 .build();
 
-        // ChatServer.broadcast는 floor/room 기준으로 필터링한다고 가정
+        // 4) (floor, room) 기준 브로드캐스트
         server.broadcast(updateMsg, null);
     }
+
 
 
     @Override

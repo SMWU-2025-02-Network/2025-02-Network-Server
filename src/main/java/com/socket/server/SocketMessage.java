@@ -1,9 +1,8 @@
 package com.socket.server;
-//프로토콜/소켓용 DTO
 
 import lombok.*;
+
 import java.util.List;
-import com.dto.SeatInfoDto;
 
 @Getter
 @Setter
@@ -12,30 +11,38 @@ import com.dto.SeatInfoDto;
 @Builder
 public class SocketMessage {
 
-    // 공통 필드
-    private String type;    // CONNECT, ROLE_SELECT, JOIN_ROOM, CHAT, CHECKIN, SENSOR_DATA, ...
-    private String role;    // USER, ADMIN, SENSOR
-    private Integer floor;  // 층 (관리자 전용 등일 때는 null도 가능)
-    private String room;    // "A", "B" 또는 null(층 전체)
-    private String sender;  // userId 또는 sensorId
+    // 공통 필드 (JOIN, CHAT, SYSTEM, DASHBOARD_UPDATE 등에서 사용)
+    private String type;      // "JOIN", "CHAT", "DASHBOARD_UPDATE" ...
+    private Integer floor;
+    private String room;
+    private String role;      // "USER", "ADMIN", "SENSOR", "SYSTEM"
+    private String sender;    // 닉네임 / 센서ID / SYSTEM
+    private String msg;       // 채팅 내용이나 시스템 메시지
 
-    // CHAT 전용
-    private String msg;     // 채팅 텍스트 (이름을 프로토콜의 "msg"랑 맞추기)
-
-    // CHECKIN / AWAY_START / AWAY_BACK / CHECKOUT 전용
+    // 좌석/체크인 관련
     private Integer seatNo;
-    private String userId;  // CHECKIN 관련 ID (sender와 같을 수도 있음)
+    private String userId;
 
-    // SENSOR_DATA / DASHBOARD_UPDATE 전용
+    // 센서 관련
     private Double temp;
-    private Double lux;
     private Double co2;
+    private Double lux;
 
-    // ERROR / ALERT 전용
-    private String message;   // 에러/알림 메시지
-    private Integer code;     // 에러 코드 등
+    // 좌석 목록 (SEAT_UPDATE 에서 사용)
+    private List<SeatInfo> seats;
 
-    // SEAT_UPDATE 전용
-    // type = "SEAT_UPDATE" 일 때, 같은 room의 좌석 상태 목록을 담아 보냄
-    private List<SeatInfoDto> seats;
+    /**
+     * 좌석 상태 정보 (클라이언트 SocketMessage.SeatInfo 와 동일 구조)
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class SeatInfo {
+        private Integer seatNo;        // 좌석 번호
+        private String state;          // "EMPTY", "IN_USE", "AWAY"
+        private String userId;         // 해당 좌석 사용자 ID (없으면 null)
+        private Integer remainSeconds; // 남은 시간(초) — 필요 없으면 null
+    }
 }
