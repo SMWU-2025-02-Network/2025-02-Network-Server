@@ -3,6 +3,7 @@ package com.socket.server;
 
 import com.service.ChatMessageService;
 import com.service.CheckinService;
+import com.service.SensorDataService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -19,14 +20,17 @@ public class ChatServer {
     private final int port = 5050;
     private final ChatMessageService chatMessageService;
     private final CheckinService checkinService;
+    private final SensorDataService sensorDataService;
 
 
     // 접속 중인 클라이언트 목록
     private final List<ClientHandler> clients = new CopyOnWriteArrayList<>();
 
-    public ChatServer(ChatMessageService chatMessageService, CheckinService checkinService) {
+    public ChatServer(ChatMessageService chatMessageService, CheckinService checkinService
+    ,SensorDataService sensorDataService) {
         this.chatMessageService = chatMessageService;
         this.checkinService = checkinService;
+        this.sensorDataService = sensorDataService;
     }
 
     public void start() {
@@ -41,7 +45,8 @@ public class ChatServer {
 
                 // 2) 핸들러 생성 후 리스트에 추가
                 ClientHandler handler =
-                        new ClientHandler(clientSocket, this, chatMessageService, checkinService);
+                        new ClientHandler(clientSocket, this, chatMessageService,
+                                checkinService,sensorDataService);
                 clients.add(handler);
 
                 // 3) 스레드로 실행

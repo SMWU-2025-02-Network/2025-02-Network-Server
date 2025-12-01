@@ -43,30 +43,39 @@ public class ConsoleChatClient {
                     String line;
                     while ((line = in.readLine()) != null) {
                         SocketMessage msg = gson.fromJson(line, SocketMessage.class);
-                        if (msg == null) continue;
+                        String type = msg.getType();
 
-                        Integer msgFloor = msg.getFloor();
-                        String msgRoom = msg.getRoom();
-
-                        String prefix = String.format("[RECV][%sF-%s]",
-                                msgFloor == null ? "-" : msgFloor.toString(),
-                                msgRoom == null ? "-" : msgRoom
-                        );
-
-                        if ("SYSTEM".equalsIgnoreCase(msg.getType())) {
-                            // 시스템 메시지 (입장/퇴장 등)
-                            System.out.printf("%s[SYSTEM] %s%n",
-                                    prefix,
+                        if ("CHAT".equalsIgnoreCase(type)) {
+                            // 일반 채팅
+                            System.out.printf("[CHAT][%dF-%s][%s] %s : %s%n",
+                                    msg.getFloor(), msg.getRoom(),
+                                    msg.getRole(), msg.getSender(),
                                     msg.getMsg());
-                        } else {
-                            // 일반 채팅 메시지
-                            System.out.printf("%s[%s] %s : %s%n",
-                                    prefix,
-                                    msg.getRole(),      // USER / ADMIN
-                                    msg.getSender(),    // 닉네임
-                                    msg.getMsg());      // 내용
+                        }
+                        else if ("SYSTEM".equalsIgnoreCase(type)) {
+                            // 입장/퇴장 알림 등
+                            System.out.printf("[SYSTEM][%dF-%s] %s%n",
+                                    msg.getFloor(), msg.getRoom(),
+                                    msg.getMsg());
+                        }
+                        else if ("DASHBOARD_UPDATE".equalsIgnoreCase(type)) {
+                            // 센서 대시보드 업데이트
+                            System.out.printf("[DASHBOARD][%dF-%s] TEMP=%.1f°C, CO2=%.0fppm, LUX=%.0f lux%n",
+                                    msg.getFloor(), msg.getRoom(),
+                                    msg.getTemp(), msg.getCo2(), msg.getLux());
+                        }
+                        else if ("SEAT_UPDATE".equalsIgnoreCase(type)) {
+                            // 좌석 상태 업데이트
+                            System.out.printf("[SEAT_UPDATE][%dF-%s] 좌석 정보 %d개 업데이트%n",
+                                    msg.getFloor(), msg.getRoom(),
+                                    msg.getSeats() != null ? msg.getSeats().size() : 0);
+                        }
+                        else {
+                            // 디버깅용
+                            System.out.println("[UNKNOWN] " + line);
                         }
                     }
+
                 } catch (IOException e) {
                     System.out.println("[CLIENT] 서버와의 연결 종료");
                 }
