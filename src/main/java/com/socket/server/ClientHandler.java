@@ -151,23 +151,31 @@ public class ClientHandler implements Runnable {
                     //SENSOR_DATA 처리
                     else if ("SENSOR_DATA".equals(type)) {
 
-                        // 1) 기본 정보 채우기 (floor, room, sender)
-                        if (msg.getFloor() == null) {
-                            msg.setFloor(this.floor);
-                        }
-                        if (msg.getRoom() == null) {
-                            msg.setRoom(this.room);
-                        }
-                        if (msg.getSender() == null) {
-                            msg.setSender(this.nickname);   // 보통 "sensor_2A" 같은 값일 것
-                        }
-                        if (msg.getRole() == null) {
-                            msg.setRole(this.role);         // SENSOR 라고 들어있을 가능성 높음
-                        }
+                        // 1) 기본 정보 채우기
+                        if (msg.getFloor() == null) msg.setFloor(this.floor);
+                        if (msg.getRoom() == null) msg.setRoom(this.room);
+                        if (msg.getSender() == null) msg.setSender(this.nickname);
+                        if (msg.getRole() == null) msg.setRole(this.role);
 
-                        // 2) 센서 데이터 저장 + 대시보드 브로드캐스트
-                        sensorDataService.handleSensorData(msg);
+                        // 2) 센서 데이터 DB/캐시 처리
+                        SensorDataService.SensorSnapshot snapshot =
+                                sensorDataService.handleSensorData(msg);
+
+                        // 3) DASHBOARD_UPDATE 만들어서 같은 room에 브로드캐스트
+                        SocketMessage dashboardMsg = SocketMessage.builder()
+                                .type("DASHBOARD_UPDATE")
+                                .floor(msg.getFloor())
+                                .room(msg.getRoom())
+                                .role("SYSTEM")
+                                .sender("SYSTEM")
+                                .temp(snapshot.temp())
+                                .co2(snapshot.co2())
+                                .lux(snapshot.lux())
+                                .build();
+
+                        server.broadcast(dashboardMsg, null);
                     }
+
                     else {
                         System.out.println("[INFO] 처리되지 않은 type: " + msg.getType());
                     }
