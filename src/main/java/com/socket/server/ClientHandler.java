@@ -51,9 +51,26 @@ public class ClientHandler implements Runnable {
 
     // 같은 방(층+구역)인지 구분하는 함수
     public boolean isSameRoom(int floor, String room) {
-        if (this.room == null || room == null) return false;
-        return this.floor == floor && this.room.equals(room);
+
+        // 1) 층이 다르면 무조건 아님
+        if (this.floor != floor) return false;
+
+        // 2) 둘 다 room 없음(null 또는 빈 문자열) → 층만 같으면 같은 방
+        boolean thisNoRoom  = (this.room == null || this.room.isBlank());
+        boolean msgNoRoom   = (room == null || room.isBlank());
+        if (thisNoRoom && msgNoRoom) {
+            return true;
+        }
+
+        // 3) 둘 다 room 있음 → floor + room 이 같을 때만
+        if (!thisNoRoom && !msgNoRoom) {
+            return this.room.equals(room);
+        }
+
+        // 4) 한쪽만 room 있음 → 다른 방
+        return false;
     }
+
 
     @Override
     public void run() {
@@ -80,26 +97,31 @@ public class ClientHandler implements Runnable {
 
                         Integer msgFloor = msg.getFloor();
                         this.floor = (msgFloor != null) ? msgFloor : -1;
-                        this.room = msg.getRoom();         // "A" / "B" / null
-                        this.nickname = msg.getSender();   // 로그인 아이디 or 닉네임
+                        this.room = msg.getRoom();         // 3,4,6층은 null
+                        this.nickname = msg.getSender();   // 로그인 아이디
                         this.role = msg.getRole();         // USER / ADMIN / SENSOR
 
                         System.out.printf("[JOIN] %s(%s) - %d층 %s%n",
                                 nickname, role, floor, room);
 
-                        // 입장 SYSTEM 알림
+                        // 1) 입장 SYSTEM 알림
                         SocketMessage notice = SocketMessage.builder()
                                 .type("SYSTEM")
                                 .role("SYSTEM")
                                 .floor(this.floor)
-                                .room(this.room)
+                                .room(this.room)   // 3,4,6층이면 null
                                 .sender("SYSTEM")
                                 .msg(nickname + " 님이 입장했습니다.")
                                 .build();
 
                         server.broadcast(notice, this);
 
+                        // 2) 현재 좌석 상태를 이 클라이언트에게만 전송
+                        if (this.floor > 0) {
+                            sendSeatUpdateToOneClient(this.floor, this.room);
+                        }
                     }
+
                     // CHAT : 같은 방 사용자에게 브로드캐스트
                     else if ("CHAT".equals(type)) {
 
@@ -177,6 +199,11 @@ public class ClientHandler implements Runnable {
                         server.broadcast(dashboardMsg, null);
                     }
 
+                    else if ("SEAT_STATUS_REQUEST".equals(type)) {
+                        handleSeatStatusRequest(msg);
+                    }
+
+
                     else {
                         System.out.println("[INFO] 처리되지 않은 type: " + msg.getType());
                     }
@@ -236,40 +263,28 @@ public class ClientHandler implements Runnable {
         String userId = msg.getUserId();
 
         try {
-            // 1) 서비스 호출 → 여기서 AlreadyCheckedInException 이 날 수 있음
             checkinService.checkin(floor, room, seatNo, userId);
+        } catch (Exception ex) {
+            System.out.println("[ERROR] CHECKIN 처리 중 예외 발생: " + ex.getMessage());
+            ex.printStackTrace();
 
-        } catch (AlreadyCheckedInException e) {
-            // 2) 이미 이용중인 좌석이 있을 때 → 이 클라이언트에게만 에러 메시지 전송
-            SocketMessage errorMsg = SocketMessage.builder()
-                    .type("ERROR")
-                    .role("SYSTEM")
-                    .floor(this.floor)        // 현재 사용자가 있는 층/방 기준으로 보내도 되고
-                    .room(this.room)
-                    .sender("SYSTEM")
-                    .msg("이미 이용중인 좌석이 있습니다.")
-                    .build();
-
-            this.sendMessage(errorMsg);       // broadcast 말고 나에게만
-            return;                           // 아래 SEAT_UPDATE는 보내지 않고 종료
-        }catch (IllegalStateException e) {
-
-            SocketMessage errorMsg = SocketMessage.builder()
+            SocketMessage err = SocketMessage.builder()
                     .type("ERROR")
                     .role("SYSTEM")
                     .floor(this.floor)
                     .room(this.room)
                     .sender("SYSTEM")
-                    .msg(e.getMessage())   // "이미 사용중인 좌석입니다."
+                    .msg(ex.getMessage())
                     .build();
 
-            this.sendMessage(errorMsg);
-            return;
+            this.sendMessage(err);
+            return;   // 에러 났으면 SEAT_UPDATE 보내지 말고 종료
         }
 
-        // 3) 정상 체크인 된 경우에만 SEAT_UPDATE 브로드캐스트
+        // 정상 체크인 된 경우에만 SEAT_UPDATE 브로드캐스트
         sendSeatUpdateToRoom(floor, room);
     }
+
 
     /**
      * AWAY_START 처리 로직
@@ -336,24 +351,21 @@ public class ClientHandler implements Runnable {
      */
     private void sendSeatUpdateToRoom(int floor, String room) {
 
-        // 1) 현재 room의 좌석 상태 가져오기 (SeatInfoDto)
         List<SeatInfoDto> dtoList = checkinService.getSeatStatusesByRoom(floor, room);
 
-        // 2) SeatInfoDto → SocketMessage.SeatInfo 변환
+        System.out.println("[SEAT_UPDATE] floor=" + floor + ", room=" + room
+                + ", seats size=" + dtoList.size());
+
         List<SocketMessage.SeatInfo> seatInfos = dtoList.stream()
                 .map(dto -> SocketMessage.SeatInfo.builder()
                         .seatNo(Integer.parseInt(dto.getSeatNo()))
-
                         .state(dto.getStatus().name())
-
                         .userId(dto.getUserId() != null ? String.valueOf(dto.getUserId()) : null)
-
-                        .remainSeconds(null)
+                        .remainSeconds(dto.getRemainSeconds())
                         .build()
                 )
                 .toList();
 
-        // 3) SocketMessage 객체 생성
         SocketMessage updateMsg = SocketMessage.builder()
                 .type("SEAT_UPDATE")
                 .floor(floor)
@@ -363,9 +375,11 @@ public class ClientHandler implements Runnable {
                 .seats(seatInfos)
                 .build();
 
-        // 4) (floor, room) 기준 브로드캐스트
         server.broadcast(updateMsg, null);
     }
+
+
+
 
     @Override
     public String toString() {
@@ -376,4 +390,53 @@ public class ClientHandler implements Runnable {
                 ", role='" + role + '\'' +
                 '}';
     }
+
+    // ClientHandler 안에 추가
+    private void sendSeatUpdateToOneClient(int floor, String room) {
+
+        // 1) 현재 room의 좌석 상태 가져오기
+        List<SeatInfoDto> dtoList = checkinService.getSeatStatusesByRoom(floor, room);
+
+        System.out.println("[SEAT_UPDATE-ONE] floor=" + floor + ", room=" + room
+                + ", seats size=" + dtoList.size());
+
+        // 2) SeatInfoDto -> SocketMessage.SeatInfo 변환
+        List<SocketMessage.SeatInfo> seatInfos = dtoList.stream()
+                .map(dto -> SocketMessage.SeatInfo.builder()
+                        .seatNo(Integer.parseInt(dto.getSeatNo()))
+                        .state(dto.getStatus().name())
+                        .userId(dto.getUserId() != null ? String.valueOf(dto.getUserId()) : null)
+                        .remainSeconds(dto.getRemainSeconds())
+                        .build()
+                )
+                .toList();
+
+        // 3) 메시지 생성
+        SocketMessage updateMsg = SocketMessage.builder()
+                .type("SEAT_UPDATE")
+                .floor(floor)
+                .room(room)
+                .role("SYSTEM")
+                .sender("SYSTEM")
+                .seats(seatInfos)
+                .build();
+
+        // 4) 이 클라이언트에게만 전송
+        this.sendMessage(updateMsg);
+    }
+
+    private void handleSeatStatusRequest(SocketMessage msg) {
+
+        if (msg.getFloor() == null) msg.setFloor(this.floor);
+        if (msg.getRoom() == null) msg.setRoom(this.room);
+
+        int floor = msg.getFloor();
+        String room = msg.getRoom();
+
+        System.out.println("[SEAT_STATUS_REQUEST] floor=" + floor + ", room=" + room);
+
+        sendSeatUpdateToOneClient(floor, room);
+    }
+
+
 }

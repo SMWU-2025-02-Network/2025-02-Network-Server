@@ -34,15 +34,24 @@ public class CheckinService {
     //----공통 함수----
     private Seat getSeat(int floor, String room, int seatNo) {
 
-        // "A" / "B" 문자열을 enum 으로 변환
-        User.RoomType roomType = User.RoomType.valueOf(room);     // room = "A" -> RoomType.A
-
-        // seatNo(int) -> seat_number(varchar) 에 맞게 String으로 변환
         String seatNumber = String.valueOf(seatNo);
+
+        // 로그 찍어서 지금 실제로 뭐가 들어오는지도 확인
+        log.info("[getSeat] floor={}, room='{}', seatNo={}", floor, room, seatNo);
+
+        // 3,4,6층 같이 room 구분이 없는 경우 (room = null 이나 공백)
+        if (room == null || room.isBlank()) {
+            return seatRepository.findByFloorAndSeatNumber(floor, seatNumber)
+                    .orElseThrow(() -> new IllegalArgumentException("좌석을 찾을 수 없습니다."));
+        }
+
+        // 1,2,5층 A/B 구역 있는 경우
+        User.RoomType roomType = User.RoomType.valueOf(room);  // "A" / "B"
 
         return seatRepository.findByFloorAndRoomAndSeatNumber(floor, roomType, seatNumber)
                 .orElseThrow(() -> new IllegalArgumentException("좌석을 찾을 수 없습니다."));
     }
+
 
     private Checkin getActiveCheckin(Seat seat) {
         return checkinRepository
@@ -156,13 +165,19 @@ public class CheckinService {
     // room 기준 좌석 상태 목록 (SEAT_UPDATE에서 사용)
     @Transactional(readOnly = true)
     public List<SeatInfoDto> getSeatStatusesByRoom(int floor, String room) {
-        User.RoomType roomType = User.RoomType.valueOf(room);   // "A" -> RoomType.A
 
-        // 1) 아직 퇴실 안 한 체크인들 가져오기
-        List<Checkin> active = checkinRepository
-                .findBySeat_FloorAndSeat_RoomAndCheckoutTimeIsNull(floor, roomType);
+        List<Checkin> active;
 
-        // 2) seat 기준 최신 row만 남기기
+        // 6층처럼 room 없는 층
+        if (room == null || room.isBlank()) {
+            active = checkinRepository.findBySeat_FloorAndCheckoutTimeIsNull(floor);
+        } else {
+            User.RoomType roomType = User.RoomType.valueOf(room); // "A","B"
+            active = checkinRepository
+                    .findBySeat_FloorAndSeat_RoomAndCheckoutTimeIsNull(floor, roomType);
+        }
+
+        // seat 별 최신 체크인만 남기기
         Map<Long, Checkin> latestBySeatId = new HashMap<>();
         for (Checkin c : active) {
             Long seatId = c.getSeat().getId();
@@ -172,22 +187,42 @@ public class CheckinService {
             }
         }
 
-        // 3) SeatInfoDto로 변환
         return latestBySeatId.values().stream()
                 .map(c -> {
                     Seat seat = c.getSeat();
                     SeatStatus seatStatus =
-                            (c.getStatus() == CheckinStatus.AWAY) ? SeatStatus.AWAY : SeatStatus.IN_USE;
+                            (c.getStatus() == CheckinStatus.AWAY)
+                                    ? SeatStatus.AWAY
+                                    : SeatStatus.IN_USE;
+
+                    // 남은 시간 계산 (필요 없으면 0으로 둬도 됨)
+                    int remainSeconds = 0;
+                    if (seatStatus == SeatStatus.IN_USE) {
+                        var end = c.getCheckinTime().plusHours(2);
+                        remainSeconds = (int) java.time.Duration
+                                .between(LocalDateTime.now(), end)
+                                .getSeconds();
+                        if (remainSeconds < 0) remainSeconds = 0;
+                    } else if (seatStatus == SeatStatus.AWAY && c.getAwayStartedAt() != null) {
+                        var end = c.getAwayStartedAt().plusHours(1);
+                        remainSeconds = (int) java.time.Duration
+                                .between(LocalDateTime.now(), end)
+                                .getSeconds();
+                        if (remainSeconds < 0) remainSeconds = 0;
+                    }
 
                     return new SeatInfoDto(
                             seat.getId(),
                             seat.getSeatNumber(),
                             seatStatus,
-                            c.getUser().getId()
+                            c.getUser().getId(),
+                            remainSeconds
                     );
                 })
                 .collect(Collectors.toList());
     }
+
+
 
 
     /**

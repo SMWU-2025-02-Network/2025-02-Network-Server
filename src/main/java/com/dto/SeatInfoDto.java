@@ -12,4 +12,5 @@ public class SeatInfoDto {
     private String seatNo;        // UI에 보여줄 좌석 번호
     private SeatStatus status;    // EMPTY / IN_USE / AWAY
     private Long userId;          // 사용자가 없으면 null
+    private Integer remainSeconds;
 }
