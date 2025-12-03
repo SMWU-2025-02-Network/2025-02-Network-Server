@@ -70,8 +70,8 @@ public class ChatServer {
         Integer msgFloor = message.getFloor();
         String msgRoom = message.getRoom();
 
-        if (msgFloor == null || msgRoom == null) {
-            log.warn("[SERVER] floor/room 정보가 없는 메시지 브로드캐스트 요청(type={}) → 스킵",
+        if (msgFloor == null) {   // floor만 필수
+            log.warn("[SERVER] floor 정보가 없는 메시지 브로드캐스트 요청(type={}) → 스킵",
                     message.getType());
             return;
         }

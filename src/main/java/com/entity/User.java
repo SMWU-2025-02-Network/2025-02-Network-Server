@@ -39,11 +39,6 @@ public class User {
     @Column(nullable = false)
     private RoleType role;
 
-    @Column(nullable = false)
-    private int floor;
-
-    @Enumerated(EnumType.STRING)
-    private RoomType room;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

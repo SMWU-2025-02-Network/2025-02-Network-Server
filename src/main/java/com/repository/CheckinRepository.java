@@ -28,4 +28,8 @@ public interface CheckinRepository extends JpaRepository<Checkin, Long> {
     //마지막 체크인 조회 메서드
     Optional<Checkin> findFirstByUserAndSeatOrderByCheckinTimeDesc(User user, Seat seat);
 
+    // room 구분 없는 층용 (3,4,6층 등)
+    List<Checkin> findBySeat_FloorAndCheckoutTimeIsNull(int floor);
+
+
 }

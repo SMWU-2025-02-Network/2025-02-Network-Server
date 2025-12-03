@@ -1,5 +1,6 @@
 package com.socket.server;
 
+import com.exception.AlreadyCheckedInException;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.service.ChatMessageService;
@@ -50,9 +51,26 @@ public class ClientHandler implements Runnable {
 
     // 같은 방(층+구역)인지 구분하는 함수
     public boolean isSameRoom(int floor, String room) {
-        if (this.room == null || room == null) return false;
-        return this.floor == floor && this.room.equals(room);
+
+        // 1) 층이 다르면 무조건 아님
+        if (this.floor != floor) return false;
+
+        // 2) 둘 다 room 없음(null 또는 빈 문자열) → 층만 같으면 같은 방
+        boolean thisNoRoom  = (this.room == null || this.room.isBlank());
+        boolean msgNoRoom   = (room == null || room.isBlank());
+        if (thisNoRoom && msgNoRoom) {
+            return true;
+        }
+
+        // 3) 둘 다 room 있음 → floor + room 이 같을 때만
+        if (!thisNoRoom && !msgNoRoom) {
+            return this.room.equals(room);
+        }
+
+        // 4) 한쪽만 room 있음 → 다른 방
+        return false;
     }
+
 
     @Override
     public void run() {
@@ -79,26 +97,31 @@ public class ClientHandler implements Runnable {
 
                         Integer msgFloor = msg.getFloor();
                         this.floor = (msgFloor != null) ? msgFloor : -1;
-                        this.room = msg.getRoom();         // "A" / "B" / null
-                        this.nickname = msg.getSender();   // 로그인 아이디 or 닉네임
+                        this.room = msg.getRoom();         // 3,4,6층은 null
+                        this.nickname = msg.getSender();   // 로그인 아이디
                         this.role = msg.getRole();         // USER / ADMIN / SENSOR
 
                         System.out.printf("[JOIN] %s(%s) - %d층 %s%n",
                                 nickname, role, floor, room);
 
-                        // 입장 SYSTEM 알림
+                        // 1) 입장 SYSTEM 알림
                         SocketMessage notice = SocketMessage.builder()
                                 .type("SYSTEM")
                                 .role("SYSTEM")
                                 .floor(this.floor)
-                                .room(this.room)
+                                .room(this.room)   // 3,4,6층이면 null
                                 .sender("SYSTEM")
                                 .msg(nickname + " 님이 입장했습니다.")
                                 .build();
 
                         server.broadcast(notice, this);
 
+                        // 2) 현재 좌석 상태를 이 클라이언트에게만 전송
+                        if (this.floor > 0) {
+                            sendSeatUpdateToOneClient(this.floor, this.room);
+                        }
                     }
+
                     // CHAT : 같은 방 사용자에게 브로드캐스트
                     else if ("CHAT".equals(type)) {
 
@@ -176,12 +199,22 @@ public class ClientHandler implements Runnable {
                         server.broadcast(dashboardMsg, null);
                     }
 
+                    else if ("SEAT_STATUS_REQUEST".equals(type)) {
+                        handleSeatStatusRequest(msg);
+                    }
+
+
                     else {
                         System.out.println("[INFO] 처리되지 않은 type: " + msg.getType());
                     }
 
                 } catch (JsonSyntaxException ex) {
                     System.out.println("[ERROR] JSON 파싱 실패: " + ex.getMessage());
+                } catch (Exception ex) {
+                    // CHECKIN 등에서 터지는 모든 예외를 여기서 잡고,
+                    //  연결은 유지하면서 로그만 남기기
+                    System.out.println("[ERROR] 메시지 처리 중 예외 발생: " + ex.getMessage());
+                    ex.printStackTrace();
                 }
             }
 
@@ -229,12 +262,29 @@ public class ClientHandler implements Runnable {
         int seatNo = msg.getSeatNo();
         String userId = msg.getUserId();
 
-        // 비즈니스 로직 서비스로 위임
-        checkinService.checkin(floor, room, seatNo, userId);
+        try {
+            checkinService.checkin(floor, room, seatNo, userId);
+        } catch (Exception ex) {
+            System.out.println("[ERROR] CHECKIN 처리 중 예외 발생: " + ex.getMessage());
+            ex.printStackTrace();
 
-        // 좌석 상태 갱신 브로드캐스트
+            SocketMessage err = SocketMessage.builder()
+                    .type("ERROR")
+                    .role("SYSTEM")
+                    .floor(this.floor)
+                    .room(this.room)
+                    .sender("SYSTEM")
+                    .msg(ex.getMessage())
+                    .build();
+
+            this.sendMessage(err);
+            return;   // 에러 났으면 SEAT_UPDATE 보내지 말고 종료
+        }
+
+        // 정상 체크인 된 경우에만 SEAT_UPDATE 브로드캐스트
         sendSeatUpdateToRoom(floor, room);
     }
+
 
     /**
      * AWAY_START 처리 로직
@@ -301,8 +351,20 @@ public class ClientHandler implements Runnable {
      */
     private void sendSeatUpdateToRoom(int floor, String room) {
 
-        // 현재 room의 좌석 상태 계산
-        List<SeatInfoDto> seats = checkinService.getSeatStatusesByRoom(floor, room);
+        List<SeatInfoDto> dtoList = checkinService.getSeatStatusesByRoom(floor, room);
+
+        System.out.println("[SEAT_UPDATE] floor=" + floor + ", room=" + room
+                + ", seats size=" + dtoList.size());
+
+        List<SocketMessage.SeatInfo> seatInfos = dtoList.stream()
+                .map(dto -> SocketMessage.SeatInfo.builder()
+                        .seatNo(Integer.parseInt(dto.getSeatNo()))
+                        .state(dto.getStatus().name())
+                        .userId(dto.getUserId() != null ? String.valueOf(dto.getUserId()) : null)
+                        .remainSeconds(dto.getRemainSeconds())
+                        .build()
+                )
+                .toList();
 
         SocketMessage updateMsg = SocketMessage.builder()
                 .type("SEAT_UPDATE")
@@ -310,12 +372,13 @@ public class ClientHandler implements Runnable {
                 .room(room)
                 .role("SYSTEM")
                 .sender("SYSTEM")
-                .seats(seats)
+                .seats(seatInfos)
                 .build();
 
-        // ChatServer.broadcast는 floor/room 기준으로 필터링한다고 가정
         server.broadcast(updateMsg, null);
     }
+
+
 
 
     @Override
@@ -327,4 +390,53 @@ public class ClientHandler implements Runnable {
                 ", role='" + role + '\'' +
                 '}';
     }
+
+    // ClientHandler 안에 추가
+    private void sendSeatUpdateToOneClient(int floor, String room) {
+
+        // 1) 현재 room의 좌석 상태 가져오기
+        List<SeatInfoDto> dtoList = checkinService.getSeatStatusesByRoom(floor, room);
+
+        System.out.println("[SEAT_UPDATE-ONE] floor=" + floor + ", room=" + room
+                + ", seats size=" + dtoList.size());
+
+        // 2) SeatInfoDto -> SocketMessage.SeatInfo 변환
+        List<SocketMessage.SeatInfo> seatInfos = dtoList.stream()
+                .map(dto -> SocketMessage.SeatInfo.builder()
+                        .seatNo(Integer.parseInt(dto.getSeatNo()))
+                        .state(dto.getStatus().name())
+                        .userId(dto.getUserId() != null ? String.valueOf(dto.getUserId()) : null)
+                        .remainSeconds(dto.getRemainSeconds())
+                        .build()
+                )
+                .toList();
+
+        // 3) 메시지 생성
+        SocketMessage updateMsg = SocketMessage.builder()
+                .type("SEAT_UPDATE")
+                .floor(floor)
+                .room(room)
+                .role("SYSTEM")
+                .sender("SYSTEM")
+                .seats(seatInfos)
+                .build();
+
+        // 4) 이 클라이언트에게만 전송
+        this.sendMessage(updateMsg);
+    }
+
+    private void handleSeatStatusRequest(SocketMessage msg) {
+
+        if (msg.getFloor() == null) msg.setFloor(this.floor);
+        if (msg.getRoom() == null) msg.setRoom(this.room);
+
+        int floor = msg.getFloor();
+        String room = msg.getRoom();
+
+        System.out.println("[SEAT_STATUS_REQUEST] floor=" + floor + ", room=" + room);
+
+        sendSeatUpdateToOneClient(floor, room);
+    }
+
+
 }
