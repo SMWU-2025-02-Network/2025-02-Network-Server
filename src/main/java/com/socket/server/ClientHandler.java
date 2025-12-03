@@ -182,6 +182,11 @@ public class ClientHandler implements Runnable {
 
                 } catch (JsonSyntaxException ex) {
                     System.out.println("[ERROR] JSON 파싱 실패: " + ex.getMessage());
+                } catch (Exception ex) {
+                    // CHECKIN 등에서 터지는 모든 예외를 여기서 잡고,
+                    //  연결은 유지하면서 로그만 남기기
+                    System.out.println("[ERROR] 메시지 처리 중 예외 발생: " + ex.getMessage());
+                    ex.printStackTrace();
                 }
             }
 
@@ -312,7 +317,7 @@ public class ClientHandler implements Runnable {
                         .state(dto.getStatus().name())
 
                         .userId(dto.getUserId() != null ? String.valueOf(dto.getUserId()) : null)
-                        
+
                         .remainSeconds(null)
                         .build()
                 )
@@ -331,8 +336,6 @@ public class ClientHandler implements Runnable {
         // 4) (floor, room) 기준 브로드캐스트
         server.broadcast(updateMsg, null);
     }
-
-
 
     @Override
     public String toString() {
