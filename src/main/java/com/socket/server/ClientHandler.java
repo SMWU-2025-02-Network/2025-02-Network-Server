@@ -242,7 +242,7 @@ public class ClientHandler implements Runnable {
         } catch (AlreadyCheckedInException e) {
             // 2) 이미 이용중인 좌석이 있을 때 → 이 클라이언트에게만 에러 메시지 전송
             SocketMessage errorMsg = SocketMessage.builder()
-                    .type("SYSTEM")           // 필요하면 "ERROR" 같은 새 타입으로 써도 됨
+                    .type("ERROR")
                     .role("SYSTEM")
                     .floor(this.floor)        // 현재 사용자가 있는 층/방 기준으로 보내도 되고
                     .room(this.room)
@@ -252,6 +252,19 @@ public class ClientHandler implements Runnable {
 
             this.sendMessage(errorMsg);       // broadcast 말고 나에게만
             return;                           // 아래 SEAT_UPDATE는 보내지 않고 종료
+        }catch (IllegalStateException e) {
+
+            SocketMessage errorMsg = SocketMessage.builder()
+                    .type("ERROR")
+                    .role("SYSTEM")
+                    .floor(this.floor)
+                    .room(this.room)
+                    .sender("SYSTEM")
+                    .msg(e.getMessage())   // "이미 사용중인 좌석입니다."
+                    .build();
+
+            this.sendMessage(errorMsg);
+            return;
         }
 
         // 3) 정상 체크인 된 경우에만 SEAT_UPDATE 브로드캐스트
