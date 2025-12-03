@@ -1,5 +1,6 @@
 package com.socket.server;
 
+import com.exception.AlreadyCheckedInException;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.service.ChatMessageService;
@@ -234,10 +235,26 @@ public class ClientHandler implements Runnable {
         int seatNo = msg.getSeatNo();
         String userId = msg.getUserId();
 
-        // 비즈니스 로직 서비스로 위임
-        checkinService.checkin(floor, room, seatNo, userId);
+        try {
+            // 1) 서비스 호출 → 여기서 AlreadyCheckedInException 이 날 수 있음
+            checkinService.checkin(floor, room, seatNo, userId);
 
-        // 좌석 상태 갱신 브로드캐스트
+        } catch (AlreadyCheckedInException e) {
+            // 2) 이미 이용중인 좌석이 있을 때 → 이 클라이언트에게만 에러 메시지 전송
+            SocketMessage errorMsg = SocketMessage.builder()
+                    .type("SYSTEM")           // 필요하면 "ERROR" 같은 새 타입으로 써도 됨
+                    .role("SYSTEM")
+                    .floor(this.floor)        // 현재 사용자가 있는 층/방 기준으로 보내도 되고
+                    .room(this.room)
+                    .sender("SYSTEM")
+                    .msg("이미 이용중인 좌석이 있습니다.")
+                    .build();
+
+            this.sendMessage(errorMsg);       // broadcast 말고 나에게만
+            return;                           // 아래 SEAT_UPDATE는 보내지 않고 종료
+        }
+
+        // 3) 정상 체크인 된 경우에만 SEAT_UPDATE 브로드캐스트
         sendSeatUpdateToRoom(floor, room);
     }
 

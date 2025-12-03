@@ -7,6 +7,7 @@ import com.entity.Checkin.CheckinStatus;
 import com.entity.Checkin.SeatStatus;
 import com.entity.Seat;
 import com.entity.User;
+import com.exception.AlreadyCheckedInException;
 import com.repository.CheckinRepository;
 import com.repository.SeatRepository;
 import com.repository.UserRepository;
@@ -57,13 +58,14 @@ public class CheckinService {
 
         Seat seat = getSeat(floor, room, seatNo);
 
-        // 같은 유저가 아직 체크아웃 안 한 게 있으면 정리
-        checkinRepository.findFirstByUserAndCheckoutTimeIsNullOrderByCheckinTimeDesc(user)
-                /*.ifPresent(Checkin::checkout);*/
-                .ifPresent(c -> {
-                    log.info("[CHECKIN] 기존 체크인 checkout 처리. checkinId={}", c.getId());
-                    c.checkout();
-                });
+        //사용자가 이미 체크인한 좌석이 있다면
+        var existingOpt =
+                checkinRepository.findFirstByUserAndCheckoutTimeIsNullOrderByCheckinTimeDesc(user);
+
+        if (existingOpt.isPresent()) {
+            throw new AlreadyCheckedInException("이미 이용중인 좌석이 있습니다.");
+        }
+
 
         // 해당 좌석에 누군가 앉아있을 경우 예외처리
         checkinRepository.findFirstBySeatAndCheckoutTimeIsNullOrderByCheckinTimeDesc(seat)
