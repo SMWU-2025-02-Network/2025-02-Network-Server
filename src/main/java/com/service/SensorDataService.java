@@ -27,15 +27,19 @@ public class SensorDataService {
     public SensorSnapshot handleSensorData(SocketMessage msg) {
 
         int floor = msg.getFloor();
-        String room = msg.getRoom();
+        String room = msg.getRoom();      // "A"/"B" 또는 null
         String sender = msg.getSender();
 
-        // 1) DB에 3행 INSERT
-        User.RoomType roomEnum = User.RoomType.valueOf(room); // "A" -> RoomType.A
+        // ✅ 1) room 이 null / 빈 문자열 / "null" 이면 enum 변환하지 않음
+        User.RoomType roomEnum = null;
+        if (room != null && !room.isBlank() && !"null".equalsIgnoreCase(room)) {
+            roomEnum = User.RoomType.valueOf(room); // "A" -> RoomType.A
+        }
 
+        // 2) DB에 3행 INSERT
         SensorData tempRow = SensorData.builder()
                 .floor(floor)
-                .room(roomEnum)
+                .room(roomEnum)  // 3,4,6층은 null 들어감
                 .type(SensorData.SensorType.TEMP)
                 .value(msg.getTemp().floatValue())
                 .sender(sender)
@@ -59,8 +63,8 @@ public class SensorDataService {
 
         sensorDataRepository.saveAll(List.of(tempRow, co2Row, luxRow));
 
-        // 2) 최신값 캐시 업데이트
-        RoomKey key = new RoomKey(floor, room);
+        // 3) 최신값 캐시 업데이트 (room 문자열 기준으로 key 구성)
+        RoomKey key = new RoomKey(floor, room);  // room 이 null이면 그대로 null
         SensorSnapshot snapshot = new SensorSnapshot(
                 msg.getTemp(),
                 msg.getCo2(),
@@ -69,9 +73,11 @@ public class SensorDataService {
         );
         latestSnapshotMap.put(key, snapshot);
 
-        log.info("[SENSOR] {}층 {}실 센서 데이터 수신 및 저장 완료", floor, room);
+        log.info("[SENSOR] {}층 {} 센서 데이터 수신 및 저장 완료",
+                floor,
+                (room == null ? "(공용)" : room + "실"));
 
-        //브로드캐스트는 여기서 하지 않고, 호출한 쪽에서 하도록 스냅샷만 반환
+        // 브로드캐스트는 여기서 하지 않고, 호출한 쪽에서 하도록 스냅샷만 반환
         return snapshot;
     }
 

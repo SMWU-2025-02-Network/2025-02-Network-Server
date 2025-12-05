@@ -25,12 +25,15 @@ public class MultiFloorSensorPublisher {
                 new SensorConfig(1, "B", "sensor_1B"),
                 new SensorConfig(2, "A", "sensor_2A"),
                 new SensorConfig(2, "B", "sensor_2B"),
-                new SensorConfig(3, "A", "sensor_3A"),
-                new SensorConfig(4, "A", "sensor_4A"),
+                // ── room 없는 층은 null ──
+                new SensorConfig(3, null, "sensor_3"),
+                new SensorConfig(4, null, "sensor_4"),
                 new SensorConfig(5, "A", "sensor_5A"),
                 new SensorConfig(5, "B", "sensor_5B"),
-                new SensorConfig(6, "A", "sensor_6A")
+                new SensorConfig(6, null, "sensor_6")
         );
+
+
 
         String host = "localhost";
         int port = 5050;           // ChatServer 포트
@@ -49,8 +52,13 @@ public class MultiFloorSensorPublisher {
     private static void runSensorLoop(String host, int port, SensorConfig cfg) {
         while (true) {
             try (Socket socket = new Socket(host, port)) {
-                System.out.printf("[SENSOR %s] 서버 연결: %d층 %s열람실%n",
-                        cfg.sensorId(), cfg.floor(), cfg.room());
+                System.out.printf(
+                        "[SENSOR %s] 서버 연결: %d층 %s%n",
+                        cfg.sensorId(),
+                        cfg.floor(),
+                        (cfg.room() == null ? "(전체)" : cfg.room() + "열람실")
+                );
+
 
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(socket.getInputStream()));
@@ -102,7 +110,7 @@ public class MultiFloorSensorPublisher {
                 System.out.printf("[SENSOR %s] 연결 오류: %s → 3초 후 재시도%n",
                         cfg.sensorId(), e.getMessage());
                 try {
-                    Thread.sleep(300000); // 에러 나면 3초 쉬고 다시 연결 시도
+                    Thread.sleep(3000); // 에러 나면 3초 쉬고 다시 연결 시도
                 } catch (InterruptedException ignored) {}
             }
         }

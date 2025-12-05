@@ -52,17 +52,23 @@ public class ClientHandler implements Runnable {
     // 같은 방(층+구역)인지 구분하는 함수
     public boolean isSameRoom(int floor, String room) {
 
-        // 1) 층이 다르면 무조건 아님
+        // 1) 층 다르면 out
         if (this.floor != floor) return false;
 
-        // 2) 둘 다 room 없음(null 또는 빈 문자열) → 층만 같으면 같은 방
-        boolean thisNoRoom  = (this.room == null || this.room.isBlank());
-        boolean msgNoRoom   = (room == null || room.isBlank());
+        // "null" 문자열도 room 없음으로 취급
+        boolean thisNoRoom  = (this.room == null
+                || this.room.isBlank()
+                || "null".equalsIgnoreCase(this.room));
+        boolean msgNoRoom   = (room == null
+                || room.isBlank()
+                || "null".equalsIgnoreCase(room));
+
+        // 2) 둘 다 room 없음 → 층 같으면 같은 방
         if (thisNoRoom && msgNoRoom) {
             return true;
         }
 
-        // 3) 둘 다 room 있음 → floor + room 이 같을 때만
+        // 3) 둘 다 room 있음 → floor+room 같을 때만
         if (!thisNoRoom && !msgNoRoom) {
             return this.room.equals(room);
         }
@@ -70,6 +76,7 @@ public class ClientHandler implements Runnable {
         // 4) 한쪽만 room 있음 → 다른 방
         return false;
     }
+
 
 
     @Override
@@ -198,6 +205,14 @@ public class ClientHandler implements Runnable {
                         if (msg.getRoom() == null) msg.setRoom(this.room);
                         if (msg.getSender() == null) msg.setSender(this.nickname);
                         if (msg.getRole() == null) msg.setRole(this.role);
+
+                        System.out.println("[SERVER] SENSOR_DATA 수신:"
+                                + " floor=" + msg.getFloor()
+                                + ", room=" + msg.getRoom()
+                                + ", sender=" + msg.getSender()
+                                + ", temp=" + msg.getTemp()
+                                + ", co2=" + msg.getCo2()
+                                + ", lux=" + msg.getLux());
 
                         // 2) 센서 데이터 DB/캐시 처리
                         SensorDataService.SensorSnapshot snapshot =
