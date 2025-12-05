@@ -27,7 +27,7 @@ public class ChatServer {
     private final List<ClientHandler> clients = new CopyOnWriteArrayList<>();
 
     public ChatServer(ChatMessageService chatMessageService, CheckinService checkinService
-    ,SensorDataService sensorDataService) {
+            , SensorDataService sensorDataService) {
         this.chatMessageService = chatMessageService;
         this.checkinService = checkinService;
         this.sensorDataService = sensorDataService;
@@ -46,7 +46,7 @@ public class ChatServer {
                 // 2) 핸들러 생성 후 리스트에 추가
                 ClientHandler handler =
                         new ClientHandler(clientSocket, this, chatMessageService,
-                                checkinService,sensorDataService);
+                                checkinService, sensorDataService);
                 clients.add(handler);
 
                 // 3) 스레드로 실행
@@ -62,11 +62,27 @@ public class ChatServer {
     /**
      * 같은 층/방 사용자에게 브로드캐스트
      * - floor, room이 null이면 전송 범위를 결정하기 애매해서 일단 무시
-     *   (필요하면 "전체 방송" 로직 따로 추가 가능)
+     * (필요하면 "전체 방송" 로직 따로 추가 가능)
      */
     public void broadcast(SocketMessage message, ClientHandler from) {
         int count = 0;
 
+        // 0. 관리자 전용 채팅 처리 ─────────────────────────
+        if ("ADMIN_CHAT".equals(message.getType())) {
+            for (ClientHandler client : clients) {
+                // ClientHandler 안에 role 필드가 있고,
+                // 로그인/JOIN 때 setRole("ADMIN"/"USER") 해준다는 전제
+                if ("ADMIN".equals(client.getRole())) {
+                    client.sendMessage(message);
+                    count++;
+                }
+            }
+
+            log.info("[SERVER] ADMIN_CHAT 브로드캐스트 완료 (전송 대상 관리자 {}명)", count);
+            return; // 일반 채팅/좌석/대시보드 브로드캐스트로 내려가지 않도록 바로 종료
+        }
+
+        // 1. 그 외(type != ADMIN_CHAT) 기존 로직 ─────────────────────────
         Integer msgFloor = message.getFloor();
         String msgRoom = message.getRoom();
 
@@ -85,10 +101,5 @@ public class ChatServer {
 
         log.info("[SERVER] 메시지 브로드캐스트 완료 (type={}, {}층 {}, 전송 대상 {}명)",
                 message.getType(), msgFloor, msgRoom, count);
-    }
-
-    public void removeClient(ClientHandler handler) {
-        clients.remove(handler);
-        log.info("[SERVER] 클라이언트 연결 종료: {}", handler);
     }
 }

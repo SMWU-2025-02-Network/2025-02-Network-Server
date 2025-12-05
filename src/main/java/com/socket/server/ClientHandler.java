@@ -151,6 +151,25 @@ public class ClientHandler implements Runnable {
                         server.broadcast(msg, this);
                     }
 
+                    else if ("ADMIN_CHAT".equals(type)) {
+
+                        // 기본 정보 비어 있으면 this.xxx 로 채우기
+                        if (msg.getFloor() == null)  msg.setFloor(this.floor);
+                        if (msg.getRoom() == null)   msg.setRoom(this.room);   // 방 정보 필요 없으면 그대로 둬도 됨
+                        if (msg.getSender() == null) msg.setSender(this.nickname);
+                        if (msg.getRole() == null)   msg.setRole(this.role);   // "ADMIN"
+
+                        // (원하면 DB 저장도 가능)
+                        try {
+                            chatMessageService.saveChat(msg);   // 관리자인 것도 role 로 같이 저장
+                        } catch (Exception e) {
+                            System.out.println("[ERROR] ADMIN_CHAT DB 저장 실패: " + e.getMessage());
+                        }
+
+                        // ChatServer 쪽에서 ADMIN 들에게만 뿌려줌
+                        server.broadcast(msg, this);
+                    }
+
                     // CHECKIN 처리
                     else if ("CHECKIN".equals(type)) {
                         handleCheckin(msg);
@@ -438,5 +457,8 @@ public class ClientHandler implements Runnable {
         sendSeatUpdateToOneClient(floor, room);
     }
 
+    public String getRole() {
+        return role;
+    }
 
 }
