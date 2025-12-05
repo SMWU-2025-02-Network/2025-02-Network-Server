@@ -39,6 +39,11 @@ public class User {
     @Column(nullable = false)
     private RoleType role;
 
+    @Column(name = "floor")
+    private Integer floor; // 관리자 담당 층 (일반 유저는 null)
+
+    @Column(name = "room")
+    private String room;   // 관리자 담당 구역 (일반 유저는 null)
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
