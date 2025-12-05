@@ -31,5 +31,10 @@ public interface CheckinRepository extends JpaRepository<Checkin, Long> {
     // room 구분 없는 층용 (3,4,6층 등)
     List<Checkin> findBySeat_FloorAndCheckoutTimeIsNull(int floor);
 
+    // 4시간 이상 사용 중인 좌석 찾기
+    List<Checkin> findByStatusAndCheckoutTimeIsNullAndCheckinTimeBefore(
+            Checkin.CheckinStatus status,
+            LocalDateTime checkinTimeBefore
+    );
 
 }

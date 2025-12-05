@@ -31,6 +31,12 @@ public class CheckinService {
     private final UserRepository userRepository;
     private final SeatRepository seatRepository;
 
+    // 사용 가능 총 시간(시간 단위)
+    private static final int MAX_USE_HOURS = 4;
+    // 외출 허용 시간(시간 단위)
+    private static final int AWAY_LIMIT_HOURS = 1;
+
+
     //----공통 함수----
     private Seat getSeat(int floor, String room, int seatNo) {
 
@@ -198,18 +204,21 @@ public class CheckinService {
                     // 남은 시간 계산 (필요 없으면 0으로 둬도 됨)
                     int remainSeconds = 0;
                     if (seatStatus == SeatStatus.IN_USE) {
-                        var end = c.getCheckinTime().plusHours(2);
+                        // 총 사용시간 4시간 기준
+                        var end = c.getCheckinTime().plusHours(MAX_USE_HOURS);
                         remainSeconds = (int) java.time.Duration
                                 .between(LocalDateTime.now(), end)
                                 .getSeconds();
                         if (remainSeconds < 0) remainSeconds = 0;
                     } else if (seatStatus == SeatStatus.AWAY && c.getAwayStartedAt() != null) {
-                        var end = c.getAwayStartedAt().plusHours(1);
+                        // 외출은 여전히 1시간 기준
+                        var end = c.getAwayStartedAt().plusHours(AWAY_LIMIT_HOURS);
                         remainSeconds = (int) java.time.Duration
                                 .between(LocalDateTime.now(), end)
                                 .getSeconds();
                         if (remainSeconds < 0) remainSeconds = 0;
                     }
+
 
                     return new SeatInfoDto(
                             seat.getId(),
@@ -223,51 +232,75 @@ public class CheckinService {
     }
 
 
-
-
     /**
      * AWAY 상태에서 기준 시간 지난 체크인들을 자동으로 checkout 처리하고,
      * 층/room 별로 최신 좌석 상태 목록을 묶어서 반환한다.
      */
     public List<SeatUpdateDto> autoCheckoutAndBuildSeatUpdates() {
 
-        //외출 시간 1분 기준 (테스트용)
-        LocalDateTime threshold = LocalDateTime.now().minusMinutes(1);
+        LocalDateTime now = LocalDateTime.now();
 
-        // 외출 시간 1시간 기준
-        // LocalDateTime threshold = LocalDateTime.now().minusHours(1);
+        // 외출 1시간 초과
+        LocalDateTime awayThreshold = now.minusHours(AWAY_LIMIT_HOURS);
 
-        var outdated = checkinRepository
+        var outdatedAway = checkinRepository
                 .findByStatusAndCheckoutTimeIsNullAndAwayStartedAtBefore(
                         CheckinStatus.AWAY,
-                        threshold
+                        awayThreshold
                 );
+
+        // 사용 4시간 초과
+        LocalDateTime useThreshold = now.minusHours(MAX_USE_HOURS);
+
+        var outdatedUse = checkinRepository
+                .findByStatusAndCheckoutTimeIsNullAndCheckinTimeBefore(
+                        CheckinStatus.IN_USE,
+                        useThreshold
+                );
+
+        // 두 리스트 합치기 (중복 방지를 위해 Set 사용)
+        Set<Checkin> outdated = new HashSet<>();
+        outdated.addAll(outdatedAway);
+        outdated.addAll(outdatedUse);
 
         // 영향을 받은 (floor, room)을 key 로 저장
         Set<String> affectedRooms = new HashSet<>();
         for (Checkin c : outdated) {
             c.checkout(); // 실제 퇴실 처리
-            String key = c.getSeat().getFloor() + "|" + c.getSeat().getRoom(); // Seat 필드명에 맞게
+
+            Integer floor = c.getSeat().getFloor();
+            User.RoomType roomType = c.getSeat().getRoom(); // null일 수도 있음
+
+            // room이 없으면 빈 문자열로
+            String roomKey = (roomType == null ? "" : roomType.name());
+
+            String key = floor + "|" + roomKey;
             affectedRooms.add(key);
         }
 
-        // 방별로 최신 좌석 상태 계산해서 SeatUpdateDto로 묶기
+
+        // 이하 기존 로직 동일
         List<SeatUpdateDto> result = new ArrayList<>();
         for (String key : affectedRooms) {
             String[] parts = key.split("\\|");
             int floor = Integer.parseInt(parts[0]);
-            String room = parts[1];
+
+            String roomPart = parts.length > 1 ? parts[1] : null;
+
+            // "" 이나 null 이면 "room 구분 없음" 으로 처리
+            String room = (roomPart == null || roomPart.isBlank()) ? null : roomPart;
 
             List<SeatInfoDto> seats = getSeatStatusesByRoom(floor, room);
 
             result.add(
                     SeatUpdateDto.builder()
                             .floor(floor)
-                            .room(room)
+                            .room(room)   // 여기서는 실제 null 들어감 (3/4/6층)
                             .seats(seats)
                             .build()
             );
         }
+
         return result;
     }
 }

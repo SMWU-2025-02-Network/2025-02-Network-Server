@@ -41,7 +41,7 @@ public class CheckinScheduler {
                             .seatNo(Integer.parseInt(dto.getSeatNo()))
                             .state(dto.getStatus().name())
                             .userId(dto.getUserId() != null ? String.valueOf(dto.getUserId()) : null)
-                            .remainSeconds(null)
+                            .remainSeconds(dto.getRemainSeconds())
                             .build()
                     )
                     .toList();
